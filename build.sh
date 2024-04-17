@@ -42,8 +42,6 @@ TOOLCHAIN=$HOME/toolchains/exynos9610_toolchains_fresh
 # External toolchain directory
 TOOLCHAIN_EXT=$(pwd)/toolchain
 
-DEVICE_DB_DIR="${ORIGIN_DIR}/Documentation/device-db"
-
 export ARCH=arm64
 export SUBARCH=arm64
 export ANDROID_MAJOR_VERSION=r
@@ -150,15 +148,7 @@ show_usage() {
 }
 
 merge_config() {
-    if [[ ! -e "${SUB_CONFIGS_DIR}/mint_${1}.config" ]]; then
-        script_echo "E: Subconfig not found on config DB!"
-        script_echo "   ${SUB_CONFIGS_DIR}/mint_${1}.config"
-        script_echo "   Make sure it is in the proper directory."
-        script_echo " "
-        exit_script
-    else
-        echo "$(cat "${SUB_CONFIGS_DIR}/mint_${1}.config")" >> "${BUILD_CONFIG_DIR}/${BUILD_DEVICE_TMP_CONFIG}"
-    fi
+    echo "$(cat "${SUB_CONFIGS_DIR}/mint_${1}.config")" >> "${BUILD_CONFIG_DIR}/${BUILD_DEVICE_TMP_CONFIG}"
 }
 
 set_android_version() {
