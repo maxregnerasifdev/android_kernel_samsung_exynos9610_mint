@@ -43,13 +43,9 @@ jobs:
       run: |
           set -eo pipefail
           echo "  I: Building Mint kernel ${GITHUB_REF##*/}-${GITHUB_RUN_NUMBER}"
-	  git clone https://gitlab.com/TenSeventy7/exynos9610_toolchains_fresh.git ${TOOLCHAIN_EXT} --single-branch -b ${BUILD_PREF_COMPILER_VERSION} --depth 1 
+          git clone https://gitlab.com/TenSeventy7/exynos9610_toolchains_fresh.git ${TOOLCHAIN_EXT} --single-branch -b ${BUILD_PREF_COMPILER_VERSION} --depth 1 
+          ./build.sh -d a50 -v boot -p
 
-	   name: Build Mint kernel
-      run: |
-	  ./build.sh -d a50 -v boot -p
-
-        
     - name: Prepare release package
       run: |
           mkdir -p ./release
@@ -86,5 +82,3 @@ jobs:
         name: Release
         path: 'release'
         if-no-files-found: error
-
- 
