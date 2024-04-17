@@ -10,7 +10,7 @@
 #  
 #  Minty - The kernel build script for Mint
 #  The Fresh Project
-#  Copyright (C) 2019-2021 TenSeventy7
+#  Version 0.1
 #  
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -319,11 +319,11 @@ main() {
 
 	parse_args "$@"
 
-	if [[ -n ${ANDROID_BUILD_TOP} ]]; then
-		script_echo "I: Android build environment detected"
-	else
+	if [[ -z ${ANDROID_BUILD_TOP} ]]; then
 		script_echo "E: Android build environment not detected"
 		exit_script
+	else
+		script_echo "I: Android build environment detected"
 	fi
 
 	if [[ ! -d ${DEVICE_DB_DIR} ]]; then
@@ -356,4 +356,5 @@ main() {
 	script_echo "I: Build completed successfully!"
 }
 
+# Run the main function with provided arguments
 main "$@"
