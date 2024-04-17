@@ -106,7 +106,6 @@ verify_toolchain() {
 	export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 	export CC=${BUILD_PREF_COMPILER}
 }
-
 update_magisk() {
 	script_echo " "
 	script_echo "I: Updating Magisk..."
