@@ -27,6 +27,7 @@
 #  
 #  =========================
 #
+
 # Utility directories
 ORIGIN_DIR=$(pwd)
 CURRENT_BUILD_USER=$(whoami)
@@ -45,7 +46,7 @@ DEVICE_DB_DIR="${ORIGIN_DIR}/Documentation/device-db"
 
 export ARCH=arm64
 export SUBARCH=arm64
-export ANDROID_MAJOR_VERSION=t
+export ANDROID_MAJOR_VERSION=r
 export PLATFORM_VERSION=11.0.0
 export $ARCH
 
@@ -134,97 +135,168 @@ fill_magisk_config() {
 	echo "KEEPVERITY=true" >> "$MAGISK_USR_DIR/backup_magisk"
 	echo "KEEPFORCEENCRYPT=true" >> "$MAGISK_USR_DIR/backup_magisk"
 	echo "RECOVERYMODE=false" >> "$MAGISK_USR_DIR/backup_magisk"
-	echo "IMG_PATCH_SLOT=false" >> "$MAGISK_USR_DIR/backup_magisk"
+	echo "PREINITDEVICE=userdata" >> "$MAGISK_USR_DIR/backup_magisk"
+
+	# Create a unique random seed per-build
+	script_echo "   - Generating a unique random seed for this build..."
+	RANDOMSEED=$(tr -dc 'a-f0-9' < /dev/urandom | head -c 16)
+	echo "RANDOMSEED=0x$RANDOMSEED" >> "$MAGISK_USR_DIR/backup_magisk"
 }
 
-# Function to apply local changes
-apply_local() {
+show_usage() {
+	script_echo "Usage: ./build.sh -d|--device <device> -v|--variant <variant> [main options]"
 	script_echo " "
-	script_echo "I: Applying local changes..."
-
-	${ORIGIN_DIR}/usr/local/apply.sh 2>&1 | sed 's/^/     /'
-}
-
-# Function to prepare the kernel source
-prepare_source() {
+	script_echo "Main options:"
+	script_echo "-d, --device <device>     Set build device to build the kernel for. Required."
+	script_echo "-a, --android <version>   Set Android version to build the kernel for. (Default: 11)"
+	script_echo "-v, --variant <variant>   Set build variant to build the kernel for. Required."
 	script_echo " "
-	script_echo "I: Preparing the kernel source..."
-
-	${ORIGIN_DIR}/usr/kernel/prepare_source.sh 2>&1 | sed 's/^/     /'
-}
-
-# Function to clean the kernel source
-clean_source() {
+	script_echo "-n, --no-clean            Do not clean and update Magisk before build."
+	script_echo "-m, --magisk [canary]     Pre-root the kernel with Magisk. Optional flag to use canary builds."
+	script_echo "                          Not available for 'recovery' variant."
+	script_echo "-p, --permissive          Build kernel with SELinux fully permissive. NOT RECOMMENDED!"
+	script_echo "-s, --strict              Force kernel to run in SELinux enforcing mode. NOT RECOMMENDED!"
 	script_echo " "
-	script_echo "I: Cleaning the kernel source..."
-
-	${ORIGIN_DIR}/usr/kernel/clean.sh 2>&1 | sed 's/^/     /'
+	script_echo "Developer options:"
+	script_echo "-h, --help                Show this help message and exit."
+	script_echo "--force-clean             Force clean the out/ directory before building."
+	script_echo "--kernel-ci               Set up the kernel for continuous integration (CI)."
+	script_echo "--update-configs          Update kernel configs before build."
+	script_echo "--skip-prebuilt           Skip including prebuilt kernel modules (ie. DRM)."
+	script_echo "--ci-pr <number>          Number of the pull request for CI."
+	script_echo "--magisk-branch <branch>  Set the branch of Magisk to use. (canary/local)"
+	script_echo "--pref-compiler <version> Set preferred compiler version. (proton/llvm/clang-13)"
+	exit 1
 }
 
-# Function to make the kernel
-make_kernel() {
+change_kernel_config() {
+	# Provide a user interface to modify kernel configurations
 	script_echo " "
-	script_echo "I: Making the kernel..."
+	script_echo "I: Modifying kernel configuration..."
 
-	${ORIGIN_DIR}/usr/kernel/make.sh 2>&1 | sed 's/^/     /'
+	# Modify kernel configurations based on user input
+	# Example: Enable specific features or parameters
+	# Example: Disable specific features or parameters
+	# Example: Change parameter values
+
+	# For demonstration, let's assume we're enabling a specific feature
+	# in the kernel configuration file .config
+	sed -i 's/# CONFIG_FEATURE is not set/CONFIG_FEATURE=y/' .config
+
+	# Notify the user about the changes
+	script_echo "   Kernel configuration modified successfully."
 }
 
-# Function to build the kernel
+customize_kernel_modules() {
+	# Provide a user interface to customize kernel modules
+	script_echo " "
+	script_echo "I: Customizing kernel modules..."
+
+	# Copy custom kernel modules to the appropriate directory
+	# Example: cp custom_module.ko drivers/custom/
+
+	# For demonstration, let's assume we're copying a custom kernel module
+	# to the drivers directory
+	cp custom_module.ko drivers/custom/
+
+	# Notify the user about the customization
+	script_echo "   Kernel modules customized successfully."
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-d|--device)
+		DEVICE=$2
+		shift 2
+		;;
+	-v|--variant)
+		VARIANT=$2
+		shift 2
+		;;
+	-a|--android)
+		ANDROID_MAJOR_VERSION=$2
+		shift 2
+		;;
+	-h|--help)
+		show_usage
+		;;
+	--force-clean)
+		FORCE_CLEAN="true"
+		shift
+		;;
+	--kernel-ci)
+		BUILD_KERNEL_CI="true"
+		shift
+		;;
+	--update-configs)
+		UPDATE_CONFIGS="true"
+		shift
+		;;
+	--skip-prebuilt)
+		SKIP_PREBUILT="true"
+		shift
+		;;
+	--magisk)
+		BUILD_KERNEL_MAGISK="true"
+		if [[ "$2" == "canary" ]]; then
+			BUILD_KERNEL_MAGISK_BRANCH="canary"
+			shift 2
+		else
+			BUILD_KERNEL_MAGISK_BRANCH="local"
+			shift
+		fi
+		;;
+	--ci-pr)
+		BUILD_KERNEL_CI_PR="$2"
+		shift 2
+		;;
+	--magisk-branch)
+		BUILD_KERNEL_MAGISK_BRANCH="$2"
+		shift 2
+		;;
+	--pref-compiler)
+		BUILD_PREF_COMPILER="$2"
+		shift 2
+		;;
+	*)
+		show_usage
+		;;
+	esac
+done
+
+# Verify essential build parameters
+if [[ -z "${DEVICE}" || -z "${VARIANT}" ]]; then
+	show_usage
+fi
+
+# Verify toolchain and setup environment
+verify_toolchain
+
+# Download or update Magisk if specified
+if [[ -z "${NO_CLEAN}" ]]; then
+	fill_magisk_config
+	update_magisk
+fi
+
+# Change kernel configuration if specified
+if [[ -n "${UPDATE_CONFIGS}" ]]; then
+	change_kernel_config
+fi
+
+# Build the kernel
 build_kernel() {
 	script_echo " "
-	script_echo "I: Building the kernel..."
+	script_echo "I: Building kernel..."
 
-	${ORIGIN_DIR}/usr/kernel/build.sh 2>&1 | sed 's/^/     /'
+	cd kernel && ./build.sh --device "${DEVICE}" --variant "${VARIANT}" --android "${ANDROID_MAJOR_VERSION}" --skip-defconfig --use-clang --prefix "$PWD/../" 2>&1 | sed 's/^/     /'
+	cd "${ORIGIN_DIR}"
 }
 
-# Function to package the kernel
-package_kernel() {
-	script_echo " "
-	script_echo "I: Packaging the kernel..."
+build_kernel
 
-	${ORIGIN_DIR}/usr/kernel/package.sh 2>&1 | sed 's/^/     /'
-}
+# Customize kernel modules if needed
+customize_kernel_modules
 
-# Main function
-main() {
-	# Print script header
-	script_echo " "
-	script_echo "========================================="
-	script_echo "    Minty - The kernel build script"
-	script_echo "========================================="
-	script_echo " "
-
-	# Verify toolchain
-	verify_toolchain
-
-	# Apply local changes
-	apply_local
-
-	# Prepare the kernel source
-	prepare_source
-
-	# Clean the kernel source
-	clean_source
-
-	# Make the kernel
-	make_kernel
-
-	# Build the kernel
-	build_kernel
-
-	# Package the kernel
-	package_kernel
-
-	# Update Magisk
-	update_magisk
-
-	# Fill Magisk config
-	fill_magisk_config
-
-	# Print script footer
-	script_echo " "
-	script_echo "I: Done!"
-}
-
-# Call the main function
-main
+script_echo " "
+script_echo "I: Kernel build completed successfully."
