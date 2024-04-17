@@ -10,7 +10,7 @@
 #  
 #  Minty - The kernel build script for Mint
 #  The Fresh Project
-#  Version 0.1
+#  Copyright (C) 2019-2021 TenSeventy7
 #  
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -59,8 +59,6 @@ exit_script() {
 }
 
 download_toolchain() {
-	script_echo " "
-	script_echo "I: Downloading recommended toolchain at ${TOOLCHAIN_EXT}..."
 	git clone https://gitlab.com/TenSeventy7/exynos9610_toolchains_fresh.git ${TOOLCHAIN_EXT} --single-branch -b ${BUILD_PREF_COMPILER_VERSION} --depth 1 2>&1 | sed 's/^/     /'
 	verify_toolchain
 }
@@ -98,6 +96,7 @@ verify_toolchain() {
 		fi
 	else
 		script_echo "I: Toolchain not found at default location or repository root"
+		script_echo "   Downloading recommended toolchain at ${TOOLCHAIN_EXT}..."
 		download_toolchain
 	fi
 
@@ -107,6 +106,7 @@ verify_toolchain() {
 	export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 	export CC=${BUILD_PREF_COMPILER}
 }
+
 update_magisk() {
 	script_echo " "
 	script_echo "I: Updating Magisk..."
@@ -158,203 +158,204 @@ show_usage() {
 	script_echo " "
 	script_echo "-h, --help                Show this message."
 	script_echo " "
-	script_echo "Variant options:"
-	script_echo "    recovery               Build a recovery flashable image."
-	script_echo "    boot                   Build a boot image."
-	script_echo " "
-	script_echo "Example usage:"
-	script_echo "   ./build.sh -d hlte -v boot -m"
-	script_echo "   ./build.sh -d hlte -v recovery -n"
+	script_echo "Additional options can be found in the script."
 }
 
-parse_args() {
-	script_echo " "
-	script_echo "I: Parsing arguments..."
+cleanup() {
+	script_echo "I: Cleaning up..."
 
-	while [[ $# -gt 0 ]]; do
-		case "$1" in
-			-d|--device)
-				DEVICE="$2"
-				shift 2
-				;;
-			-a|--android)
-				ANDROID_MAJOR_VERSION="$2"
-				shift 2
-				;;
-			-v|--variant)
-				VARIANT="$2"
-				shift 2
-				;;
-			-n|--no-clean)
-				NO_CLEAN=true
-				shift
-				;;
-			-m|--magisk)
-				BUILD_MAGISK=true
-				BUILD_KERNEL_MAGISK_BRANCH="$2"
-				shift 2
-				;;
-			-p|--permissive)
-				PERMISSIVE=true
-				shift
-				;;
-			-h|--help)
-				show_usage
-				exit_script
-				;;
-			*)
-				script_echo "E: Invalid argument: $1"
-				show_usage
-				exit_script
-				;;
-		esac
-	done
-
-	if [[ -z "${DEVICE}" || -z "${VARIANT}" ]]; then
-		script_echo "E: Device and variant must be specified!"
-		show_usage
-		exit_script
+	if [[ ${BUILD_KERNEL_CLEAN} == 'true' ]]; then
+		script_echo "   - Cleaning up build environment..."
+		make clean && make mrproper
 	fi
 
-	if [[ "${VARIANT}" != "boot" && "${VARIANT}" != "recovery" ]]; then
-		script_echo "E: Invalid variant specified!"
-		show_usage
-		exit_script
+	if [[ ${BUILD_MAGISK_UPDATE} == 'true' ]]; then
+		update_magisk
 	fi
 
-	if [[ "${BUILD_MAGISK}" == "true" && "${VARIANT}" == "recovery" ]]; then
-		script_echo "E: Magisk pre-rooting not available for recovery variant!"
-		show_usage
-		exit_script
-	fi
-}
-
-prepare_build() {
-	script_echo " "
-	script_echo "I: Preparing build environment..."
-
-	if [[ "${NO_CLEAN}" != "true" ]]; then
-		script_echo "   - Cleaning build environment..."
-		make O=out clean 2>&1 | sed 's/^/     /'
-	fi
-
-	if [[ "${PERMISSIVE}" == "true" ]]; then
-		script_echo "   - Building with SELinux permissive..."
-		sed -i '/CONFIG_SECURITY_SELINUX/d' arch/arm64/configs/vendor/${DEVICE}_defconfig
-		echo "CONFIG_SECURITY_SELINUX=y" >> arch/arm64/configs/vendor/${DEVICE}_defconfig
-		echo "CONFIG_SECURITY_SELINUX_BOOTPARAM=y" >> arch/arm64/configs/vendor/${DEVICE}_defconfig
-		echo "CONFIG_SECURITY_SELINUX_DISABLE=y" >> arch/arm64/configs/vendor/${DEVICE}_defconfig
-		echo "CONFIG_SECURITY_SELINUX_DEVELOP=y" >> arch/arm64/configs/vendor/${DEVICE}_defconfig
-		echo "CONFIG_SECURITY_SELINUX_POLICYDB_VERSION_MAX=" >> arch/arm64/configs/vendor/${DEVICE}_defconfig
-	fi
-
-	if [[ "${BUILD_MAGISK}" == "true" ]]; then
+	if [[ ${BUILD_MAGISK_CONFIG} == 'true' ]]; then
 		fill_magisk_config
 	fi
 }
 
+set_file_name() {
+	if [[ ${BUILD_KERNEL_BRANCH} != "" ]]; then
+		KERNEL_BRANCH="-${BUILD_KERNEL_BRANCH}"
+	fi
+
+	KERNEL_VERSION=$(make kernelversion)
+	KERNEL_PATCHLEVEL=$(make kernelversion | cut -d'.' -f2)
+	KERNEL_SUBLEVEL=$(make kernelversion | cut -d'.' -f3)
+
+	if [[ ${BUILD_KERNEL_VARIANT} == 'canary' ]]; then
+		# VersionCode example: 14 -> 14.00
+		VERSION_CODE=$(printf "%02d" ${KERNEL_SUBLEVEL})
+	else
+		VERSION_CODE=${KERNEL_SUBLEVEL}
+	fi
+
+	FILE_NAME="${DEVICE}-${KERNEL_VERSION}.${VERSION_CODE}${KERNEL_BRANCH}-$(date +%Y%m%d-%H%M%S)-${BUILD_KERNEL_VARIANT}"
+}
+
 build_kernel() {
 	script_echo " "
-	script_echo "I: Building kernel image..."
+	script_echo "I: Building kernel..."
 
-	make O=out ${DEVICE}_defconfig 2>&1 | sed 's/^/     /'
-	make O=out -j$(nproc --all) 2>&1 | sed 's/^/     /'
+	if [[ ${BUILD_KERNEL_PERMISSIVE} == 'true' ]]; then
+		script_echo "   WARNING: Building with SELinux fully permissive!"
+	fi
+
+	if [[ ${BUILD_PREF_COMPILER} == 'clang' ]]; then
+		script_echo "   - Using Clang ${BUILD_PREF_COMPILER_VERSION} toolchain..."
+	else
+		script_echo "   - Using GCC ${BUILD_PREF_COMPILER_VERSION} toolchain..."
+	fi
+
+	if [[ ${BUILD_KERNEL_PERMISSIVE} == 'true' ]]; then
+		make -j$(nproc --all) O=out ARCH=arm64 ${DEVICE_CONFIG} SELINUX_DEFCONFIG=selinux_defconfig ${BUILD_PREF_COMPILER}_permissive 2>&1 | sed 's/^/     /'
+	else
+		make -j$(nproc --all) O=out ARCH=arm64 ${DEVICE_CONFIG} SELINUX_DEFCONFIG=selinux_defconfig ${BUILD_PREF_COMPILER} 2>&1 | sed 's/^/     /'
+	fi
 
 	if [[ $? -eq 0 ]]; then
-		script_echo "   - Kernel image successfully built!"
+		script_echo "   - Kernel built successfully!"
 	else
-		script_echo "E: Failed to build kernel image!"
+		script_echo "E: Failed to build kernel!"
 		exit_script
 	fi
 }
 
-build_boot_img() {
+build_image() {
 	script_echo " "
-	script_echo "I: Building boot image..."
+	script_echo "I: Building image..."
 
-	cp out/arch/arm64/boot/Image.gz-dtb out/arch/arm64/boot/Image.gz-dtb.tmp
-	"${ANDROID_BUILD_TOP}/mkbootimg/mkboot" --kernel out/arch/arm64/boot/Image.gz-dtb.tmp \
-		--ramdisk "${ANDROID_BUILD_TOP}/vendor/${VENDOR}/${DEVICE}/ramdisk.img" \
-		--cmdline "androidboot.hardware=${DEVICE} androidboot.selinux=enforcing" \
-		--base 0x10000000 \
-		--pagesize 4096 \
-		--output "${ORIGIN_DIR}/out/boot_${DEVICE}.img" 2>&1 | sed 's/^/     /'
-	rm out/arch/arm64/boot/Image.gz-dtb.tmp
+	VERSION=$(cat ${ANDROID_DIR}/core/version_defaults.mk | grep "PLATFORM_VERSION := " | sed 's/PLATFORM_VERSION := //g')
+	PATCHLEVEL=$(cat ${ANDROID_DIR}/core/version_defaults.mk | grep "PLATFORM_SECURITY_PATCH :=" | sed 's/PLATFORM_SECURITY_PATCH := //g')
+	SUBLEVEL=$(cat ${ANDROID_DIR}/core/version_defaults.mk | grep "PLATFORM_VERSION_CODENAME :=" | sed 's/PLATFORM_VERSION_CODENAME := //g')
 
-	if [[ $? -eq 0 ]]; then
-		script_echo "   - Boot image successfully built!"
-	else
-		script_echo "E: Failed to build boot image!"
-		exit_script
-	fi
+	script_echo "   - Android version: ${VERSION} (Security patch level: ${PATCHLEVEL})"
 }
 
-build_recovery_img() {
+build_package() {
 	script_echo " "
-	script_echo "I: Building recovery image..."
+	script_echo "I: Packaging kernel..."
 
-	cp out/arch/arm64/boot/Image.gz-dtb out/arch/arm64/boot/Image.gz-dtb.tmp
-	"${ANDROID_BUILD_TOP}/mkbootimg/mkboot" --kernel out/arch/arm64/boot/Image.gz-dtb.tmp \
-		--ramdisk "${ANDROID_BUILD_TOP}/vendor/${VENDOR}/${DEVICE}/ramdisk-recovery.img" \
-		--cmdline "androidboot.hardware=${DEVICE} androidboot.selinux=enforcing" \
-		--base 0x10000000 \
-		--pagesize 4096 \
-		--output "${ORIGIN_DIR}/out/recovery_${DEVICE}.img" 2>&1 | sed 's/^/     /'
-	rm out/arch/arm64/boot/Image.gz-dtb.tmp
+	mkdir -p "${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}"
 
-	if [[ $? -eq 0 ]]; then
-		script_echo "   - Recovery image successfully built!"
-	else
-		script_echo "E: Failed to build recovery image!"
-		exit_script
+	cp ${ORIGIN_DIR}/out/arch/arm64/boot/Image.gz-dtb ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.img
+	cp ${ORIGIN_DIR}/out/arch/arm64/boot/dtbo.img ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}-dtbo.img
+
+	if [[ ${BUILD_KERNEL_VARIANT} == 'recovery' ]]; then
+		cp ${ORIGIN_DIR}/out/arch/arm64/boot/recovery.img ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}-recovery.img
 	fi
+
+	echo "DEVICE=${DEVICE}" > ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop
+	echo "VARIANT=${BUILD_KERNEL_VARIANT}" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop
+	echo "VERSION=${VERSION}" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop
+	echo "PATCHLEVEL=${PATCHLEVEL}" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop
+	echo "SUBLEVEL=${SUBLEVEL}" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop
+	echo "KERNEL_VERSION=${KERNEL_VERSION}" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop
+	echo "KERNEL_PATCHLEVEL=${KERNEL_PATCHLEVEL}" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop
+	echo "KERNEL_SUBLEVEL=${KERNEL_SUBLEVEL}" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop
+	echo "TIMESTAMP=$(date +%Y%m%d-%H%M%S)" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop
+
+	cp ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}.prop ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}-flashable.prop
+
+	echo "VERSION=${VERSION}" > ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/mint.prop
+	echo "PATCHLEVEL=${PATCHLEVEL}" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/mint.prop
+	echo "SUBLEVEL=${SUBLEVEL}" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/mint.prop
+	echo "TIMESTAMP=$(date +%Y%m%d-%H%M%S)" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/mint.prop
+
+	echo "#!/system/bin/sh" > ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}-flashable.sh
+	echo "dd if=/data/media/0/Download/${FILE_NAME}.img of=/dev/block/by-name/boot bs=1M && sync" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}-flashable.sh
+	echo "dd if=/data/media/0/Download/${FILE_NAME}-dtbo.img of=/dev/block/by-name/dtbo bs=1M && sync" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}-flashable.sh
+
+	if [[ ${BUILD_KERNEL_VARIANT} == 'recovery' ]]; then
+		echo "dd if=/data/media/0/Download/${FILE_NAME}-recovery.img of=/dev/block/by-name/recovery bs=1M && sync" >> ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}-flashable.sh
+	fi
+
+	chmod +x ${ORIGIN_DIR}/out/${DEVICE}/${BUILD_KERNEL_VARIANT}/${FILE_NAME}-flashable.sh
 }
 
-main() {
-	script_echo " "
-	script_echo "Minty - The kernel build script for Mint"
-	script_echo "The Fresh Project"
-	script_echo "Version 0.1"
-	script_echo " "
+# Default values
+BUILD_KERNEL_CLEAN='true'
+BUILD_MAGISK_UPDATE='false'
+BUILD_MAGISK_CONFIG='false'
+BUILD_KERNEL_PERMISSIVE='false'
+BUILD_KERNEL_CI='false'
 
-	parse_args "$@"
+# Process command-line arguments
+while [[ $# -gt 0 ]]; do
+	key="$1"
 
-	if [[ -z ${ANDROID_BUILD_TOP} ]]; then
-		script_echo "E: Android build environment not detected"
-		exit_script
-	else
-		script_echo "I: Android build environment detected"
-	fi
+	case $key in
+		-d|--device)
+		DEVICE="$2"
+		shift # past argument
+		shift # past value
+		;;
+		-a|--android)
+		PLATFORM_VERSION="$2"
+		shift # past argument
+		shift # past value
+		;;
+		-v|--variant)
+		BUILD_KERNEL_VARIANT="$2"
+		shift # past argument
+		shift # past value
+		;;
+		-n|--no-clean)
+		BUILD_KERNEL_CLEAN='false'
+		shift # past argument
+		;;
+		-m|--magisk)
+		BUILD_KERNEL_MAGISK_BRANCH="$2"
+		BUILD_MAGISK_UPDATE='true'
+		BUILD_MAGISK_CONFIG='true'
+		shift # past argument
+		shift # past value
+		;;
+		-p|--permissive)
+		BUILD_KERNEL_PERMISSIVE='true'
+		shift # past argument
+		;;
+		--ci)
+		BUILD_KERNEL_CI='true'
+		shift # past argument
+		;;
+		-h|--help)
+		show_usage
+		exit
+		;;
+		*)
+		script_echo "E: Unknown option: $1"
+		show_usage
+		exit 1
+		;;
+	esac
+done
 
-	if [[ ! -d ${DEVICE_DB_DIR} ]]; then
-		script_echo "E: Device DB not found!"
-		exit_script
-	fi
+# Check if required options are set
+if [[ -z "${DEVICE}" || -z "${BUILD_KERNEL_VARIANT}" ]]; then
+	script_echo "E: Missing required options!"
+	show_usage
+	exit 1
+fi
 
-	verify_toolchain
+# Initialize Android directories
+ANDROID_DIR="${ORIGIN_DIR}/android-${PLATFORM_VERSION}"
+DEVICE_DIR="${ANDROID_DIR}/device/${DEVICE}"
 
-	script_echo " "
-	script_echo "I: Setting up kernel build for ${DEVICE} (${VARIANT})..."
+# Load the configuration for the specified device
+DEVICE_CONFIG="${DEVICE}_${BUILD_KERNEL_VARIANT}_defconfig"
+if [[ ! -f "${DEVICE_DB_DIR}/${DEVICE_CONFIG}" ]]; then
+	script_echo "E: Device configuration '${DEVICE_CONFIG}' not found!"
+	exit 1
+fi
 
-	source "${DEVICE_DB_DIR}/${DEVICE}.sh"
-
-	prepare_build
-
-	build_kernel
-
-	if [[ "${VARIANT}" == "boot" ]]; then
-		build_boot_img
-	elif [[ "${VARIANT}" == "recovery" ]]; then
-		build_recovery_img
-	fi
-
-	if [[ "${BUILD_MAGISK}" == "true" ]]; then
-		update_magisk
-	fi
-
-	script_echo " "
-	script_echo "I: Build completed successfully!"
-}
-
-# Run the main function with provided arguments
-main "$@"
+# Main script logic
+cleanup
+download_toolchain
+build_kernel
+build_image
+build_package
