@@ -281,7 +281,6 @@ esac
 get_devicedb_info
 
 BUILD_CONFIG_DIR="${ORIGIN_DIR}/.config"
-BUILD_DEVICE_TMP_CONFIG="${BUILD_DEVICE}_${BUILD_VARIANT}.config"
 
 if [[ ! -d "${BUILD_CONFIG_DIR}" ]]; then
     mkdir -p "${BUILD_CONFIG_DIR}"
