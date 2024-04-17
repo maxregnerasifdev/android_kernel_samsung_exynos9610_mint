@@ -280,18 +280,6 @@ esac
 
 get_devicedb_info
 
-BUILD_CONFIG_DIR="${ORIGIN_DIR}/.config"
-
-if [[ ! -d "${BUILD_CONFIG_DIR}" ]]; then
-    mkdir -p "${BUILD_CONFIG_DIR}"
-fi
-
-if [[ "${BUILD_KERNEL_CLEAN}" == true ]]; then
-    script_echo " "
-    script_echo "I: Cleaning previous build artifacts..."
-    make clean && make mrproper
-fi
-
 if [[ "${BUILD_KERNEL_MAGISK}" == true ]]; then
     update_magisk
 fi
