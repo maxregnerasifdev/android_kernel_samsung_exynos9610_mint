@@ -48,10 +48,6 @@ export ANDROID_MAJOR_VERSION=r
 export PLATFORM_VERSION=11.0.0
 export $ARCH
 
-script_echo() {
-    echo "  $1"
-}
-
 exit_script() {
     kill -INT $$
 }
@@ -147,38 +143,14 @@ show_usage() {
     exit_script
 }
 
-merge_config() {
-    echo "$(cat "${SUB_CONFIGS_DIR}/mint_${1}.config")" >> "${BUILD_CONFIG_DIR}/${BUILD_DEVICE_TMP_CONFIG}"
-}
-
 set_android_version() {
     echo "CONFIG_MINT_PLATFORM_VERSION=${BUILD_ANDROID_PLATFORM}" >> "${BUILD_CONFIG_DIR}/${BUILD_DEVICE_TMP_CONFIG}"
-}
-
-get_devicedb_info() {
-    case ${BUILD_DEVICE} in
-        "a50")
-            DEVICE_BOARD_CONFIG="universal9610_defconfig"
-            ;;
-        "a50s")
-            DEVICE_BOARD_CONFIG="a50s_defconfig"
-            ;;
-    esac
 }
 
 source_helpers() {
     for file in "${ORIGIN_DIR}"/utils/helpers/*.sh; do
         if [[ -f $file ]]; then
             source $file
-        fi
-    done
-}
-
-get_subconfigs() {
-    for config in "${SUB_CONFIGS_DIR}"/*.config; do
-        if [[ -f "${config}" ]]; then
-            CONFIG_NAME=$(basename ${config})
-            SUB_CONFIGS_LIST+=("${CONFIG_NAME%.*}")
         fi
     done
 }
@@ -268,8 +240,6 @@ case ${BUILD_VARIANT} in
         ;;
 esac
 
-get_devicedb_info
-
 BUILD_CONFIG_DIR="${ORIGIN_DIR}/.config"
 BUILD_DEVICE_TMP_CONFIG="${BUILD_DEVICE}_${BUILD_VARIANT}.config"
 
@@ -280,7 +250,8 @@ fi
 if [[ "${BUILD_KERNEL_CLEAN}" == true ]]; then
     script_echo " "
     script_echo "I: Cleaning previous build artifacts..."
-    make clean && make mrproper
+    # make clean && make mrproper
+    rm -rf "${BUILD_CONFIG_DIR:?}/"* && rm -rf "${ORIGIN_DIR}/release"
 fi
 
 if [[ "${BUILD_KERNEL_MAGISK}" == true ]]; then
@@ -296,7 +267,7 @@ if [[ "${BUILD_KERNEL_PERMISSIVE}" == true ]]; then
 fi
 
 if [[ ! -f "${BUILD_CONFIG_DIR}/${BUILD_DEVICE_TMP_CONFIG}" ]]; then
-    merge_config "${BUILD_DEVICE_TMP_CONFIG}"
+    # merge_config "${BUILD_DEVICE_TMP_CONFIG}"
     set_android_version
 fi
 
@@ -312,13 +283,13 @@ if [[ ! -d "${SUB_CONFIGS_DIR}" ]]; then
     exit_script
 fi
 
-get_subconfigs
+# get_subconfigs
 
-if [[ ! "${SUB_CONFIGS_LIST[@]}" ]]; then
-    script_echo "E: Subconfigs not found on repository!"
-    script_echo "   ${SUB_CONFIGS_DIR}"
-    exit_script
-fi
+# if [[ ! "${SUB_CONFIGS_LIST[@]}" ]]; then
+#     script_echo "E: Subconfigs not found on repository!"
+#     script_echo "   ${SUB_CONFIGS_DIR}"
+#     exit_script
+# fi
 
 cd "${ORIGIN_DIR}" || exit
 
@@ -326,4 +297,4 @@ if [[ "${BUILD_KERNEL_CI}" == true ]]; then
     verify_toolchain
 fi
 
-make ${DEVICE_BOARD_CONFIG}
+# make ${DEVICE_BOARD_CONFIG}
