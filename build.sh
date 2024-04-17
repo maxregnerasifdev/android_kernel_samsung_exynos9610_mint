@@ -59,6 +59,8 @@ exit_script() {
 }
 
 download_toolchain() {
+	script_echo " "
+	script_echo "I: Downloading recommended toolchain at ${TOOLCHAIN_EXT}..."
 	git clone https://gitlab.com/TenSeventy7/exynos9610_toolchains_fresh.git ${TOOLCHAIN_EXT} --single-branch -b ${BUILD_PREF_COMPILER_VERSION} --depth 1 2>&1 | sed 's/^/     /'
 	verify_toolchain
 }
@@ -96,7 +98,6 @@ verify_toolchain() {
 		fi
 	else
 		script_echo "I: Toolchain not found at default location or repository root"
-		script_echo "   Downloading recommended toolchain at ${TOOLCHAIN_EXT}..."
 		download_toolchain
 	fi
 
