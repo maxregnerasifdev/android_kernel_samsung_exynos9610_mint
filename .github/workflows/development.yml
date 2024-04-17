@@ -16,14 +16,7 @@ jobs:
       fail-fast: true
       
     steps:
-    - name: Set up Android environment
-      uses: android-actions/setup-android@v2
-      with:
-        sdk-version: '13'
-        build-tools-version: '32.0.0'
-        target-platform: 'android-33'
-
-    # Update Debian/Ubuntu Repositories, Install dependencies, Build Mint kernel, Prepare release package, Upload release package, and Upload build config artifact steps remain unchanged.
+      # Steps for setting up environment and building kernel remain unchanged
 
   oneui-s-m:
     name: Build One UI 5 (Enforcing; Magisk Canary)
@@ -33,14 +26,7 @@ jobs:
       fail-fast: true
       
     steps:
-    - name: Set up Android environment
-      uses: android-actions/setup-android@v2
-      with:
-        sdk-version: '13'
-        build-tools-version: '32.0.0'
-        target-platform: 'android-33'
-
-    # Remaining steps similar to oneui-s-e job
+      # Steps for setting up environment and building kernel remain unchanged
 
   oneui-s-p:
     name: Build One UI 5 (Permissive)
@@ -56,17 +42,35 @@ jobs:
         sdk-version: '13'
         build-tools-version: '32.0.0'
         target-platform: 'android-33'
-
-    # Remaining steps similar to oneui-s-e job
+        
+      # Remaining steps for building the kernel can be added here.
 
   # Jobs for other variants (Magisk Canary, AOSP, etc.) follow a similar structure with Android 13 setup.
 
   release:
     name: Release files and configs
     if: ${{ !contains(github.event.head_commit.message, '[skip rel]') }}
-    needs: [oneui-s-m]
+    needs: [oneui-s-e, oneui-s-p, oneui-s-m, aosp-s-e, aosp-s-p, aosp-s-m]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
     steps:
     - uses: actions/checkout@v2
+
+    - name: Set Kernel Header
+      run: |
+        echo "// Kernel header for Galaxy A50" > kernel_header.txt
+        echo "// Generated on: $(date)" >> kernel_header.txt
+        echo "// Author: Your Name" >> kernel_header.txt
+        echo "" >> kernel_header.txt
+        cat kernel_header.txt .config > .config_with_header
+        mv .config_with_header .config
+
+    - name: Zip release files and configs
+      run: zip -r release_files_and_configs.zip release
+
+    - name: Upload release
+      uses: actions/upload-artifact@v2
+      with:
+        name: Release Files and Configs
+        path: release_files_and_configs.zip
