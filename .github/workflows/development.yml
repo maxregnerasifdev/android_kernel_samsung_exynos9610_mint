@@ -50,7 +50,7 @@ jobs:
   release:
     name: Release files and configs
     if: ${{ !contains(github.event.head_commit.message, '[skip rel]') }}
-    needs: [oneui-s-e, oneui-s-p, oneui-s-m, aosp-s-e, aosp-s-p, aosp-s-m]
+    needs: [oneui-s-e]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -67,7 +67,7 @@ jobs:
         mv .config_with_header .config
 
     - name: Zip release files and configs
-      run: zip -r release_files_and_configs.zip release
+      run: zip -r release_files_and_configs.zip .
 
     - name: Upload release
       uses: actions/upload-artifact@v2
