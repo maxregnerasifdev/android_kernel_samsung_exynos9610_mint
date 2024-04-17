@@ -71,14 +71,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Set Kernel Header
-      run: |
-        echo "// Kernel header for Galaxy A50" > kernel_header.txt
-        echo "// Generated on: $(date)" >> kernel_header.txt
-        echo "// Author: Your Name" >> kernel_header.txt
-        echo "" >> kernel_header.txt
-        cat kernel_header.txt .config > .config_with_header
-        mv .config_with_header .config
 
     - name: Zip release files and configs
       run: zip -r release_files_and_configs.zip .
