@@ -16,7 +16,14 @@ jobs:
       fail-fast: true
       
     steps:
-      # Steps for setting up environment and building kernel remain unchanged
+    - name: Set up Android environment
+      uses: android-actions/setup-android@v2
+      with:
+        sdk-version: '13'
+        build-tools-version: '32.0.0'
+        target-platform: 'android-33'
+        
+      # Add steps for building the kernel here.
 
   oneui-s-m:
     name: Build One UI 5 (Enforcing; Magisk Canary)
@@ -26,7 +33,14 @@ jobs:
       fail-fast: true
       
     steps:
-      # Steps for setting up environment and building kernel remain unchanged
+    - name: Set up Android environment
+      uses: android-actions/setup-android@v2
+      with:
+        sdk-version: '13'
+        build-tools-version: '32.0.0'
+        target-platform: 'android-33'
+        
+      # Add steps for building the kernel here.
 
   oneui-s-p:
     name: Build One UI 5 (Permissive)
@@ -43,14 +57,14 @@ jobs:
         build-tools-version: '32.0.0'
         target-platform: 'android-33'
         
-      # Remaining steps for building the kernel can be added here.
+      # Add steps for building the kernel here.
 
   # Jobs for other variants (Magisk Canary, AOSP, etc.) follow a similar structure with Android 13 setup.
 
   release:
     name: Release files and configs
     if: ${{ !contains(github.event.head_commit.message, '[skip rel]') }}
-    needs: [oneui-s-e, oneui-s-m]
+    needs: [oneui-s-e]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
