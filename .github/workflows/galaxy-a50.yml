@@ -43,7 +43,7 @@ jobs:
       run: |
           set -eo pipefail
           echo "  I: Building Mint kernel ${GITHUB_REF##*/}-${GITHUB_RUN_NUMBER}"
-          ./build.sh -d a50 -v oneui -p
+          ./build.sh -d a50 -v oneui 
 
     - name: Prepare release package
       run: |
